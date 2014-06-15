@@ -312,7 +312,7 @@ static int mxc_ipu_ioctl(struct inode *inode, struct file *file,
 		structure and pass the pointer in arg */
 		{
 			ipu_event_info info;
-			int r = -1;
+			int r;
 
 			if (copy_from_user
 					(&info, (ipu_event_info *) arg,
@@ -320,7 +320,7 @@ static int mxc_ipu_ioctl(struct inode *inode, struct file *file,
 				return -EFAULT;
 
 			r = get_events(&info);
-			if (r == -1) {
+			while (r == -1) {
 				if ((file->f_flags & O_NONBLOCK) &&
 					(irq_info[info.irq].irq_pending == 0))
 					return -EAGAIN;
@@ -329,13 +329,15 @@ static int mxc_ipu_ioctl(struct inode *inode, struct file *file,
 				if (r == -ERESTARTSYS)
 					return r;
 				r = get_events(&info);
+				if (r == -1) {
+					/* Shouldn't happen? */
+					printk(KERN_ERR "no events after waiting\n");
+				}
 			}
-			ret = -1;
-			if (r == 0) {
-				if (!copy_to_user((ipu_event_info *) arg,
-					&info, sizeof(ipu_event_info)))
-					ret = 0;
-			}
+			if (copy_to_user((ipu_event_info *) arg,
+				&info, sizeof(ipu_event_info)))
+				return -EFAULT;
+			ret = 0;
 		}
 		break;
 	case IPU_ALOC_MEM:
